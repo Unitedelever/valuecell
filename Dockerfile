@@ -1,39 +1,40 @@
-FROM python:3.11-slim
+FROM debian:bookworm-slim
 
-# 安装基础工具 + unzip（关键！）
 RUN apt-get update && apt-get install -y \
     curl \
     git \
     build-essential \
+    python3 \
+    python3-venv \
+    python3-pip \
     unzip \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# 安装 uv（Python 包管理）——它会装到 /root/.local/bin 里
+# install uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:${PATH}"
 
-# 安装 bun（前端）
+# install bun
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:${PATH}"
 
 WORKDIR /app
 COPY . /app
 
-# 先复制一份 env 模板
-RUN cp .env.example .env
+# optional: copy env template
+RUN cp .env.example .env || true
 
-# 安装 Python 依赖
+# ---- backend deps ----
+WORKDIR /app/python
 RUN uv sync
 
-# 构建前端
+# ---- frontend build (comment out if repo has no /frontend) ----
 WORKDIR /app/frontend
-RUN bun install && bun run build
+RUN bun install
+RUN bun run build
 
-# 回到根目录
-WORKDIR /app
-
-EXPOSE 1420
-
-# 启动。这里兼容 Render 的 PORT
-CMD ["sh", "-c", "export PORT=${PORT:-1420} && bash start.sh"]
-
+# ---- run server ----
+WORKDIR /app/python
+EXPOSE 8000
+CMD ["uv", "run", "python", "-m", "valuecell.api"]
